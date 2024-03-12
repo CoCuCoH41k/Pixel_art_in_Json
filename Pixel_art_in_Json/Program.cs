@@ -1,41 +1,60 @@
 ﻿using Structures;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
 class MainClass
 {
-    public static int NULL_cnt, COLOR_cnt = 0;
-    public static List<Structures.Color>? pallete;
+    public static List<JSON_Image_raw> JSONI_list = new List<JSON_Image_raw>();
+    public static List<Thread> Thread_list = new List<Thread>(); 
+    public static bool threads_done = false;
 
-    public static bool Color_exist(Structures.Color Color)
+    public static void Threads_check()
     {
-        if (pallete == null)
+        while (!threads_done)
         {
-            pallete = new List<Structures.Color>();
-            pallete.Add(Color);
+            bool flag = false;
+            foreach (Thread t in Thread_list)
+            {
+
+                if (t.ThreadState == System.Threading.ThreadState.Running) flag = false;
+                if (t.ThreadState == System.Threading.ThreadState.Stopped) flag = true;
+            }
+            if (flag) break;
         }
+
+        threads_done = true;
+    }
+
+    public static bool Color_exist(Structures.Color Color, List<Structures.Color> pallete)
+    {
+        if (pallete == null) return false;
 
         foreach (Structures.Color clr in pallete)
         {
             if (clr.Equals(Color)) return true;
         }
 
-        pallete.Add(Color);
         return false;
     }
 
-    public static int Serch_clr_id(Structures.Color color)
+    public static int Serch_clr_id(Structures.Color color, List<Structures.Color> pallete)
     {
-        Color_exist(color);
-        for (int id = 0; id < pallete.Count; id++)
+        if (!Color_exist(color, pallete)) {
+            return -1;
+        } else
         {
-            if (pallete[id].Equals(color)) return id;
+            for (int id = 0; id < pallete.Count; id++)
+            {
+                if (pallete[id].Equals(color)) return id;
+            }
+            return -1;
         }
-        return -1;
     }
 
     public static int Get_block_index_by_pos(float x, float y, Block[] blocks)
@@ -157,18 +176,22 @@ class MainClass
         return new_blocks.ToArray();
     }
 
-    public static JSON_Image Convert(Bitmap image)
+    public static void Convert(Bitmap image) // "void" <=> "JSON_Image"
     {
         image.RotateFlip(RotateFlipType.RotateNoneFlipY);
         Size size = image.Size;
         Block[] blocks = new Block[size.Width * size.Height];
+        List<Structures.Color> pallete = new List<Structures.Color>();
         
         for (int index = 0; index < size.Width * size.Height; index++)
         {
             int xPos = index % size.Width;
             int yPos = (int)(index / size.Width);
             Structures.Color curr_color = new Structures.Color(image.GetPixel(xPos, yPos));
-            blocks[index] = new Block(((int)Block_ID.Pixel), xPos, yPos, Serch_clr_id(curr_color));
+
+            if (!Color_exist(curr_color, pallete)) pallete.Add(curr_color);
+
+            blocks[index] = new Block(((int)Block_ID.Pixel), xPos, yPos, Serch_clr_id(curr_color, pallete));
         }
 
         List<Block> blocks_to_check = new List<Block>();
@@ -180,28 +203,112 @@ class MainClass
 
         int[] arr_size = new int[2] { size.Width, size.Height };
 
-        Console.WriteLine($"Before optimization: {blocks.Length} blocks");
-
         Block[] new_blocks = Optimize(blocks_to_check.ToArray<Block>(), size);
 
-        Console.WriteLine($"Optimization result: {new_blocks.Length} blocks");
+        Console.WriteLine($"Optimization: {blocks.Length} -> {new_blocks.Length} blocks");
 
+        JSONI_list.Add(new JSON_Image_raw(arr_size, new_blocks, pallete));
 
-        return new JSON_Image(arr_size, pallete.ToArray(), new_blocks);
+        //return new JSON_Image(arr_size, pallete.ToArray(), new_blocks);
     }
-    
+
+    public static void For_art(string folder_path)
+    {
+        string[] files = Directory.GetFiles(folder_path);
+        foreach (string file in files)
+        {
+            Console.WriteLine($"Art to convert: {file.Split("\\").Last()}");
+            Bitmap img = new Bitmap(file);
+
+            Thread art_converting = new Thread(() => Convert(img));
+            
+            Thread_list.Add(art_converting);
+            //art_converting.Start();
+        }
+
+        foreach (Thread thread in Thread_list)
+        {
+            thread.Start();
+
+            thread.Join();
+
+            
+        }
+    }
+
+    public static JSON_Image Merge_JSONI()
+    {
+        int[] size_end = new int[2];
+        Block[] blocks_end = { };
+        List<Structures.Color> pallete_end = new List<Structures.Color>();
+
+        for (int index = 0; index < JSONI_list.Count; index++)
+        {
+            List<Structures.Color> colors = JSONI_list[index].Colors_set.ToList();
+
+            foreach(var color in colors)
+            {
+                if (!Color_exist(color, pallete_end))
+                {
+                    pallete_end.Add(color);
+                }
+            }
+        }
+
+        for (int index = 0; index < JSONI_list.Count; index++)
+        {
+            Block[] blocks = JSONI_list[index].Blocks;
+            List<Structures.Color> curr_pallete = JSONI_list[index].Colors_set;
+
+            
+            int local_size = JSONI_list[index].size[0];
+            Block[] to_merge = new Block[blocks.Length];
+
+            for (int j = 0; j < blocks.Length; j++)
+            {
+                int new_color_id = Serch_clr_id(curr_pallete[blocks[j].color_id], pallete_end);
+                to_merge[j] = new Block(blocks[j].obj_id, blocks[j].x + size_end[0] + 4 * index, blocks[j].y, new_color_id);
+            }
+            blocks_end = blocks_end.Concat(to_merge).ToArray();
+            size_end[0] += JSONI_list[index].size[0];
+            size_end[1] = Math.Max(size_end[1], JSONI_list[index].size[1]);
+        }
+
+        return new JSON_Image(size_end, pallete_end.ToArray(), blocks_end);
+    }
+
     static void Main(string[] args)
     {
-        Stopwatch stopwatch = new Stopwatch();
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        Stopwatch Converting = new Stopwatch();
+        Stopwatch Merging = new Stopwatch();
 
-        Bitmap img = new Bitmap("C:\\Users\\DENIS\\Desktop\\kris_walk.png", false);
-        string fileName = "C:\\Users\\DENIS\\Desktop\\kris_walk.json";
-         
-        stopwatch.Start();
-        string jsonString = JsonSerializer.Serialize(Convert(img));
-        stopwatch.Stop();
+        string file_path = "C:\\Users\\DENIS\\Desktop\\gd gameplay deltarune-undertale\\Undertale-Deltarune-gameplay-in-GD-with-SPWN\\";
+        string name = "art.json";
 
-        Console.WriteLine($"Complete in: {stopwatch.ElapsedMilliseconds} milliseconds");
-        File.WriteAllText(fileName, jsonString);
+        Converting.Start();
+        
+        For_art("C:\\Users\\DENIS\\Desktop\\art_to_gd_art");
+        Threads_check();
+
+        Converting.Stop();
+
+        Console.WriteLine($"Complete (1 / 2) converting in: {Converting.ElapsedMilliseconds} milliseconds");
+
+        Merging.Start();
+
+        JSON_Image result = Merge_JSONI();
+        string jsonString = JsonSerializer.Serialize(result, options);
+
+        Merging.Stop();
+
+        File.WriteAllText(file_path + name, jsonString);
+        Console.WriteLine($"Complete (2 / 2) merging in: {Merging.ElapsedMilliseconds} milliseconds");
+
+        Console.WriteLine($"All done in: {Converting.ElapsedMilliseconds + Merging.ElapsedMilliseconds} milliseconds");
+        Console.WriteLine(
+            $"Blocks: {result.Blocks.Length}\n" +
+            $"Colors: {result.Colors_set.Length}\n" +
+            $"Size: {result.size[0]}x{result.size[1]}");
     }
 }

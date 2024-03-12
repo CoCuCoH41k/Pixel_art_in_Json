@@ -49,8 +49,9 @@
     internal class JSON_Image
     {
         public int[] size { get; set; } = new int[2];
-        public Array[] Blocks { get; set; }
         public Array[] Colors_set { get; set; }
+        public Array[] Blocks { get; set; }
+        
         public JSON_Image(int[] size, Color[] colors_set, Block[] blocks)
         {
             this.size = size;
@@ -59,6 +60,22 @@
 
             for (int i = 0; i < blocks.Length; i++) this.Blocks[i] = new float[4] { blocks[i].obj_id, blocks[i].x, blocks[i].y, blocks[i].color_id };
             for (int i = 0; i < colors_set.Length; i++) this.Colors_set[i] = new float[4] { colors_set[i].r, colors_set[i].g, colors_set[i].b, colors_set[i].a };
+        }
+    }
+
+    internal class JSON_Image_raw
+    {
+        public int[] size { get; set; } = new int[2];
+
+        public Block[] Blocks { get; set; }
+
+        public List<Color> Colors_set { get; set; }
+
+        public JSON_Image_raw(int[] size, Block[] blocks, List<Color> colors_set)
+        {
+            this.size = size;
+            Blocks = blocks;
+            Colors_set = colors_set;
         }
     }
 }
