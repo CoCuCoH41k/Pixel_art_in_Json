@@ -68,8 +68,6 @@ class MainClass
             }
         }
         return blocks.ToList().IndexOf(to_check);
-
-
     }
 
     public static Block Get_block_by_pos(float x, float y, Block[] blocks)
@@ -129,8 +127,6 @@ class MainClass
             while (true)
             {
                 flag = true;
-
-                //List<Block> local_BTC = blocks_to_check;
                 foreach (Block block in blocks_to_check.ToList())
                 {
                     blocks_to_check.Remove(block);
@@ -158,7 +154,6 @@ class MainClass
                                 block.y + offset_multipling,
                                 block.color_id
                         ));
-
                         break;
                     }
                 }
@@ -176,7 +171,7 @@ class MainClass
         return new_blocks.ToArray();
     }
 
-    public static void Convert(Bitmap image) // "void" <=> "JSON_Image"
+    public static void Convert_Image(Bitmap image)
     {
         image.RotateFlip(RotateFlipType.RotateNoneFlipY);
         Size size = image.Size;
@@ -202,14 +197,11 @@ class MainClass
         }
 
         int[] arr_size = new int[2] { size.Width, size.Height };
-
         Block[] new_blocks = Optimize(blocks_to_check.ToArray<Block>(), size);
 
         Console.WriteLine($"Optimization: {blocks.Length} -> {new_blocks.Length} blocks");
 
         JSONI_list.Add(new JSON_Image_raw(arr_size, new_blocks, pallete));
-
-        //return new JSON_Image(arr_size, pallete.ToArray(), new_blocks);
     }
 
     public static void For_art(string folder_path)
@@ -220,7 +212,7 @@ class MainClass
             Console.WriteLine($"Art to convert: {file.Split("\\").Last()}");
             Bitmap img = new Bitmap(file);
 
-            Thread art_converting = new Thread(() => Convert(img));
+            Thread art_converting = new Thread(() => Convert_Image(img));
             
             Thread_list.Add(art_converting);
             //art_converting.Start();
@@ -283,12 +275,29 @@ class MainClass
         Stopwatch Converting = new Stopwatch();
         Stopwatch Merging = new Stopwatch();
 
-        string file_path = "C:\\Users\\DENIS\\Desktop\\gd gameplay deltarune-undertale\\Undertale-Deltarune-gameplay-in-GD-with-SPWN\\";
+        string path = null; //"C:\\Users\\DENIS\\Desktop\\json_files\\";
+        Console.Write($"Write folder path where the arts located ( Example: {@"C:\Users\USER_NAME\Desktop\art_files"} )\n-> ");
+        path = Console.ReadLine();
+        if (path.Length == 0)
+        {
+            Console.WriteLine("Path can't be empty. bro =/");
+            Environment.Exit(0);
+        }
+
+        string file_result_path = null; // "C:\\Users\\DENIS\\Desktop\\gd gameplay deltarune-undertale\\Undertale-Deltarune-gameplay-in-GD-with-SPWN\\"
+        Console.Write($"Write folder path where the converted arts will be located ( Example: {@"C:\Users\USER_NAME\Desktop\art_files"} )\n-> ");
+        file_result_path = Console.ReadLine();
+        if (file_result_path.Length == 0)
+        {
+            Console.WriteLine("Path can't be empty. bro =/");
+            Environment.Exit(0);
+        }
+
         string name = "art.json";
 
         Converting.Start();
         
-        For_art("C:\\Users\\DENIS\\Desktop\\art_to_gd_art");
+        For_art(path);
         Threads_check();
 
         Converting.Stop();
@@ -302,7 +311,7 @@ class MainClass
 
         Merging.Stop();
 
-        File.WriteAllText(file_path + name, jsonString);
+        File.WriteAllText(file_result_path + "\\" + name, jsonString);
         Console.WriteLine($"Complete (2 / 2) merging in: {Merging.ElapsedMilliseconds} milliseconds");
 
         Console.WriteLine($"All done in: {Converting.ElapsedMilliseconds + Merging.ElapsedMilliseconds} milliseconds");
